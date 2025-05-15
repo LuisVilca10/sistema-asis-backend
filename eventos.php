@@ -84,6 +84,57 @@ if ($method === 'GET') {
     exit;
 }
 
+// ========================
+// ELIMINAR EVENTO POR ID
+// ========================
+if ($method === 'DELETE') {
+    $headers = getallheaders();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+
+    if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token no proporcionado"]);
+        exit;
+    }
+
+    $token = $matches[1];
+
+    try {
+        $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token inválido: " . $e->getMessage()]);
+        exit;
+    }
+
+    parse_str(file_get_contents("php://input"), $deleteVars);
+    if (!isset($deleteVars['id'])) {
+        echo json_encode(["error" => "ID de evento no proporcionado"]);
+        exit;
+    }
+
+    $eventoId = intval($deleteVars['id']);
+
+    $conn = new mysqli("localhost", "root", "", "metodica_maestro");
+    if ($conn->connect_error) {
+        echo json_encode(["error" => "Error al conectar a la BD"]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("DELETE FROM maestro_evento WHERE id = ?");
+    $stmt->bind_param("i", $eventoId);
+
+    if ($stmt->execute()) {
+        echo json_encode(["success" => true, "message" => "Evento eliminado correctamente"]);
+    } else {
+        echo json_encode(["error" => "No se pudo eliminar el evento", "detalle" => $stmt->error]);
+    }
+
+    $stmt->close();
+    $conn->close();
+    exit;
+}
+
 echo json_encode(["error" => "Método no permitido o mal uso de la API"]);
 
 ?>
