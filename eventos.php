@@ -1,6 +1,6 @@
 <?php
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header("Content-Type: application/json");
 
@@ -11,6 +11,9 @@ use \Firebase\JWT\Key;
 $secretKey = '3st0y-S3gurO-4Qu1';
 $method = $_SERVER['REQUEST_METHOD'];
 
+// ==========================
+// CREAR EVENTO (POST)
+// ==========================
 if ($method === 'POST') {
     $headers = getallheaders();
     $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
@@ -62,8 +65,9 @@ if ($method === 'POST') {
     }
     exit;
 }
+
 // ========================
-// LISTAR TODOS LOS EVENTOS
+// LISTAR EVENTOS (GET)
 // ========================
 if ($method === 'GET') {
     $conn = new mysqli("localhost", "root", "", "metodica_maestro");
@@ -84,6 +88,103 @@ if ($method === 'GET') {
     exit;
 }
 
-echo json_encode(["error" => "Método no permitido o mal uso de la API"]);
+// ========================
+// ELIMINAR EVENTO (DELETE)
+// ========================
+if ($method === 'DELETE') {
+    $headers = getallheaders();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
 
+    if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token no proporcionado"]);
+        exit;
+    }
+
+    $token = $matches[1];
+
+    try {
+        $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token inválido: " . $e->getMessage()]);
+        exit;
+    }
+
+    if (!isset($_GET['id'])) {
+        http_response_code(400);
+        echo json_encode(["error" => "ID del evento no proporcionado"]);
+        exit;
+    }
+
+    $id = intval($_GET['id']);
+    $conn = new mysqli("localhost", "root", "", "metodica_maestro");
+    if ($conn->connect_error) {
+        echo json_encode(["error" => "Error al conectar a la BD"]);
+        exit;
+    }
+
+    $sql = "DELETE FROM maestro_evento WHERE id = $id";
+    if ($conn->query($sql) === TRUE) {
+        echo json_encode(["success" => true, "message" => "Evento eliminado correctamente"]);
+    } else {
+        echo json_encode(["error" => "No se pudo eliminar el evento", "detalle" => $conn->error]);
+    }
+
+    $conn->close();
+    exit;
+}
+
+// ========================
+// ACTUALIZAR NOMBRE EVENTO
+// ========================
+if ($method === 'PUT') {
+    $headers = getallheaders();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+
+    if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token no proporcionado"]);
+        exit;
+    }
+
+    $token = $matches[1];
+
+    try {
+        $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
+    } catch (Exception $e) {
+        http_response_code(401);
+        echo json_encode(["error" => "Token inválido: " . $e->getMessage()]);
+        exit;
+    }
+
+    $input = json_decode(file_get_contents("php://input"), true);
+
+    if (!isset($input['id'], $input['nuevo_nombre'])) {
+        echo json_encode(["success" => false, "error" => "Faltan datos"]);
+        exit;
+    }
+
+    $conn = new mysqli("localhost", "root", "", "metodica_maestro");
+    if ($conn->connect_error) {
+        echo json_encode(["success" => false, "error" => "Error de conexión"]);
+        exit;
+    }
+
+    $id = intval($input['id']);
+    $nuevo_nombre = $conn->real_escape_string($input['nuevo_nombre']);
+
+    $sql = "UPDATE maestro_evento SET nombre = '$nuevo_nombre' WHERE id = $id";
+
+    if ($conn->query($sql)) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false, "error" => "No se pudo actualizar"]);
+    }
+
+    $conn->close();
+    exit;
+}
+
+echo json_encode(["error" => "Método no permitido o mal uso de la API"]);
 ?>
