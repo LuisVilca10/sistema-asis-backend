@@ -1,8 +1,13 @@
 <?php
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header("Content-Type: application/json");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header("HTTP/1.1 200 OK");
+    exit();
+}
 
 require_once 'vendor/autoload.php';
 use \Firebase\JWT\JWT;
@@ -11,25 +16,13 @@ use \Firebase\JWT\Key;
 $secretKey = '3st0y-S3gurO-4Qu1';
 $method = $_SERVER['REQUEST_METHOD'];
 
+// ==========================
+// CREAR EVENTO (POST)
+// ==========================
 if ($method === 'POST') {
-    $headers = getallheaders();
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+    
 
-    if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-        http_response_code(401);
-        echo json_encode(["error" => "Token no proporcionado"]);
-        exit;
-    }
-
-    $token = $matches[1];
-
-    try {
-        $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
-    } catch (Exception $e) {
-        http_response_code(401);
-        echo json_encode(["error" => "Token inválido: " . $e->getMessage()]);
-        exit;
-    }
+    
 
     $input = json_decode(file_get_contents("php://input"), true);
 
@@ -62,8 +55,9 @@ if ($method === 'POST') {
     }
     exit;
 }
+
 // ========================
-// LISTAR TODOS LOS EVENTOS
+// LISTAR EVENTOS (GET)
 // ========================
 if ($method === 'GET') {
     $conn = new mysqli("localhost", "root", "", "metodica_maestro");
@@ -85,56 +79,68 @@ if ($method === 'GET') {
 }
 
 // ========================
-// ELIMINAR EVENTO POR ID
+// ELIMINAR EVENTO (DELETE)
 // ========================
 if ($method === 'DELETE') {
-    $headers = getallheaders();
-    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : null;
+    
 
-    if (!$authHeader || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-        http_response_code(401);
-        echo json_encode(["error" => "Token no proporcionado"]);
+    if (!isset($_GET['id'])) {
+        http_response_code(400);
+        echo json_encode(["error" => "ID del evento no proporcionado"]);
         exit;
     }
 
-    $token = $matches[1];
-
-    try {
-        $decoded = JWT::decode($token, new Key($secretKey, 'HS256'));
-    } catch (Exception $e) {
-        http_response_code(401);
-        echo json_encode(["error" => "Token inválido: " . $e->getMessage()]);
-        exit;
-    }
-
-    parse_str(file_get_contents("php://input"), $deleteVars);
-    if (!isset($deleteVars['id'])) {
-        echo json_encode(["error" => "ID de evento no proporcionado"]);
-        exit;
-    }
-
-    $eventoId = intval($deleteVars['id']);
-
+    $id = intval($_GET['id']);
     $conn = new mysqli("localhost", "root", "", "metodica_maestro");
     if ($conn->connect_error) {
         echo json_encode(["error" => "Error al conectar a la BD"]);
         exit;
     }
 
-    $stmt = $conn->prepare("DELETE FROM maestro_evento WHERE id = ?");
-    $stmt->bind_param("i", $eventoId);
-
-    if ($stmt->execute()) {
+    $sql = "DELETE FROM maestro_evento WHERE id = $id";
+    if ($conn->query($sql) === TRUE) {
         echo json_encode(["success" => true, "message" => "Evento eliminado correctamente"]);
     } else {
-        echo json_encode(["error" => "No se pudo eliminar el evento", "detalle" => $stmt->error]);
+        echo json_encode(["error" => "No se pudo eliminar el evento", "detalle" => $conn->error]);
     }
 
-    $stmt->close();
+    $conn->close();
+    exit;
+}
+
+// ========================
+// ACTUALIZAR NOMBRE EVENTO
+// ========================
+if ($method === 'PUT') {
+    
+
+    $input = json_decode(file_get_contents("php://input"), true);
+
+    if (!isset($input['id'], $input['nombre'])) {
+        echo json_encode(["success" => false, "error" => "Faltan datos"]);
+        exit;
+    }
+
+    $conn = new mysqli("localhost", "root", "", "metodica_maestro");
+    if ($conn->connect_error) {
+        echo json_encode(["success" => false, "error" => "Error de conexión"]);
+        exit;
+    }
+
+    $id = intval($input['id']);
+    $nuevo_nombre = $conn->real_escape_string($input['nombre']);
+
+    $sql = "UPDATE maestro_evento SET nombre = '$nuevo_nombre' WHERE id = $id";
+
+    if ($conn->query($sql)) {
+        echo json_encode(["success" => true]);
+    } else {
+        echo json_encode(["success" => false, "error" => "No se pudo actualizar"]);
+    }
+
     $conn->close();
     exit;
 }
 
 echo json_encode(["error" => "Método no permitido o mal uso de la API"]);
-
 ?>
