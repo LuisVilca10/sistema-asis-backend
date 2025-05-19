@@ -33,15 +33,18 @@ if (empty($dni)) {
 }
 
 // Consulta preparada
-$sql = "SELECT id FROM maestro_data WHERE dni = ?";
+$sql = "SELECT nombres FROM maestro_data WHERE dni = ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("s", $dni);
 $stmt->execute();
 $result = $stmt->get_result();
 
 // Resultado
-$existe = $result->num_rows > 0;
-echo json_encode(['existe' => $existe]);
+if ($row = $result->fetch_assoc()) {
+    echo json_encode(['existe' => true, 'nombres' => $row['nombres']]);
+} else {
+    echo json_encode(['existe' => false]);
+}
 
 $stmt->close();
 $conn->close();
