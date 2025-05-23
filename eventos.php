@@ -108,16 +108,13 @@ if ($method === 'DELETE') {
     exit;
 }
 
-// ========================
-// ACTUALIZAR NOMBRE EVENTO
-// ========================
 if ($method === 'PUT') {
-    
+    $headers = getallheaders();
 
     $input = json_decode(file_get_contents("php://input"), true);
 
-    if (!isset($input['id'], $input['nombre'])) {
-        echo json_encode(["success" => false, "error" => "Faltan datos"]);
+    if (!isset($input['id'])) {
+        echo json_encode(["success" => false, "error" => "ID requerido"]);
         exit;
     }
 
@@ -128,19 +125,45 @@ if ($method === 'PUT') {
     }
 
     $id = intval($input['id']);
-    $nuevo_nombre = $conn->real_escape_string($input['nombre']);
+    $sql = "UPDATE maestro_evento SET ";
+    $updates = [];
 
-    $sql = "UPDATE maestro_evento SET nombre = '$nuevo_nombre' WHERE id = $id";
+    if (isset($input['nombre'])) {
+        $nombre = $conn->real_escape_string($input['nombre']);
+        $updates[] = "nombre = '$nombre'";
+    }
+
+    if (isset($input['imagen'])) {
+        $base64 = $input['imagen'];
+        $ruta = "imagenes_eventos/evento_$id.jpg";
+
+        // Crear carpeta si no existe
+        if (!is_dir("imagenes_eventos")) {
+            mkdir("imagenes_eventos", 0777, true);
+        }
+
+        // Guardar archivo
+        file_put_contents($ruta, base64_decode($base64));
+        $updates[] = "imagen = '$ruta'";
+    }
+
+    if (empty($updates)) {
+        echo json_encode(["success" => false, "error" => "Nada para actualizar"]);
+        exit;
+    }
+
+    $sql .= implode(', ', $updates) . " WHERE id = $id";
 
     if ($conn->query($sql)) {
-        echo json_encode(["success" => true]);
+        echo json_encode(["success" => true, "message" => "Evento actualizado"]);
     } else {
-        echo json_encode(["success" => false, "error" => "No se pudo actualizar"]);
+        echo json_encode(["success" => false, "error" => "Error al actualizar: " . $conn->error]);
     }
 
     $conn->close();
     exit;
 }
+
 
 echo json_encode(["error" => "Método no permitido o mal uso de la API"]);
 ?>
